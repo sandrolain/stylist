@@ -5,10 +5,12 @@ import { camelCase } from "./utils";
 
 
 export interface SheetOptions {
+  /** StyleSheet name for reference */
   sheetName?: string;
+  /** Media types for the StyleSheet */
   media?: string;
+  /** StyleSheet content as string */
   content?: string;
-  props?: RuleProps;
 }
 
 export class Sheet {
@@ -117,7 +119,6 @@ export class Sheet {
 
   setProperties (selector: string, props: RuleProps, index = -1): Sheet | false {
     const rule = this.getSelectorLastRule(selector, index);
-
     return rule ? this._applyPropsToRule(rule, props) : false;
   }
 

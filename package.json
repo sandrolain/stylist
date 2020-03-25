@@ -1,7 +1,7 @@
 {
-  "name": "slot-css",
+  "name": "stylist",
   "version": "0.0.1",
-  "description": "Stylesheets control library",
+  "description": "CSSStyleSheet manipulation library",
   "author": "Sandro Lain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sandrolain/slot-css.git"
+    "url": "git+https://github.com/sandrolain/stylist.git"
   },
   "keywords": [
     "style",

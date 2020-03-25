@@ -1,1 +1,1 @@
-# SLOT CSS: Light custom elements library
+# STYLIST: CSSStyleSheet manipulation library

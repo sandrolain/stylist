@@ -54,7 +54,7 @@ export class Rule {
   }
 
   /**
-   * Check if the rule has a specified property defined
+   * Check if the *Rule* has a specified property defined
    * @param name CSS property name
    */
   hasProperty (name: string): boolean {
@@ -164,7 +164,7 @@ export class Rule {
     } else {
       selector = `${this.selector} ${selector}`;
     }
-    return this.sheet.selectorRule(selector, props);
+    return this.sheet.getRule(selector, props);
   }
 
   /**

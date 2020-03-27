@@ -1,6 +1,6 @@
 import { Rule, RuleProps } from "./Rule";
 import { ClassRule } from "./ClassRule";
-import { fixPropertyValue, fixPropertyValueAsString } from "./tools";
+import { fixPropertyValue } from "./tools";
 import { camelCase } from "./utils";
 
 
@@ -16,7 +16,7 @@ export interface SheetOptions {
 export class Sheet {
   protected $style: HTMLStyleElement;
   protected styleSheet: CSSStyleSheet;
-  protected sheetProxy: {};
+  protected proxy: Sheet;
 
   constructor (protected name: string = "", media: string = "screen", content: string = null) {
 
@@ -36,82 +36,103 @@ export class Sheet {
     this.$style     = $style;
     this.styleSheet = $style.sheet as CSSStyleSheet;
 
-    this.sheetProxy = new Proxy({}, {
-      has: (target: {}, name: string): boolean => {
-        return this.hasRule(name);
+    this.proxy = new Proxy(this, {
+      has: (target: Sheet, name: string): boolean => {
+        return target.hasRule(name);
       },
-      get: (target: {}, name: string): any => {
-        if(typeof (this as any)[name] === "function") {
-          return (this as any)[name].bind(this);
+      get: (target: Sheet, name: string): any => {
+        if(typeof (target as any)[name] === "function") {
+          return (target as any)[name].bind(target);
         } else if(["$style", "styleSheet"].indexOf(name) > -1) {
-          return (this as any)[name];
+          return (target as any)[name];
         }
-
-        return this.selectorRule(name);
+        return target.getRule(name);
       },
-      set: (target: {}, name: string, value: any): boolean => {
+      set: (target: Sheet, name: string, value: any): boolean => {
         if(["styleSheet"].indexOf(name) > -1) {
-          (this as any)[name] = value;
+          (target as any)[name] = value;
         } else {
-          this.setProperties(name, value);
+          target.setProperties(name, value);
         }
-
         return true;
       },
-      deleteProperty: (target: {}, name: string): boolean => {
-        this.deleteRule(name);
+      deleteProperty: (target: Sheet, name: string): boolean => {
+        target.deleteRule(name);
         return true;
       }
     });
-
-    return this.sheetProxy as Sheet;
   }
 
+  getProxy (): Sheet {
+    return this.proxy;
+  }
+
+  /**
+   * Check if the *Sheet* has a specified property defined for a specified selector
+   * @param selector CSS selector
+   * @param property CSS property name
+   */
   hasProperty (selector: string, property: string): boolean {
     const props = this.getSelectorProperties(selector);
     return props ? (property in props) : false;
   }
 
+  /**
+   * Return a property value as string for a specified selector if defined or false if not found
+   * @param selector CSS selector
+   * @param property CSS property name
+   */
   getProperty (selector: string, property: string): string | false {
     const props = this.getSelectorProperties(selector);
     return props ? props[property] : false;
   }
 
+  /**
+   * Set a property value for a specified selector into this *Sheet*
+   * @param selector CSS selector
+   * @param property CSS property name
+   * @param value CSS property value
+   */
   setProperty (selector: string, property: string, value: any): Sheet | false {
     return this.setProperties(selector, { [property] : value });
   }
 
+  /**
+   * Remove a property for a specified selector from this *Sheet*
+   * @param selector CSS selector
+   * @param property CSS property name
+   */
   deleteProperty (selector: string, property: string): void {
-    const rules = this.getSelectorRulesList(selector);
-
+    const rules = this.getSelectorCSSRulesList(selector);
     for(const rule of rules) {
-      if(!( rule instanceof CSSStyleRule)) {
-        continue;
+      if(rule instanceof CSSStyleRule) {
+        rule.style.removeProperty(property);
       }
-
-      const style = rule.style;
-
-      style.removeProperty(property);
     }
   }
 
+  /**
+   * Verify if is defined a *Rule* for the specified selector into this *Sheet*
+   * @param selector CSS selector
+   */
   hasRule (selector: string): boolean {
-    const rule = this.getSelectorRulesList(selector);
-
-    return (rule.length > 0);
+    const rulesList = this.getSelectorCSSRulesList(selector);
+    return (rulesList.length > 0);
   }
 
+  getRule (selector: string, props: RuleProps = {}): Rule {
+    return new Rule(this, selector, props);
+  }
+
+  /**
+   * Remove from this *Sheet* the *Rule* for the specified selector
+   * @param selector CSS selector
+   */
   deleteRule (selector: string): void {
     const cssRules = this.styleSheet.cssRules;
-
     for(let i = 0, len = cssRules.length; i < len; i++) {
       const rule = cssRules[i];
-
-      if(!( rule instanceof CSSStyleRule)) {
-        continue;
-      }
-
-      if(rule.selectorText === selector) {
+      if(rule instanceof CSSStyleRule && rule.selectorText === selector) {
         this.styleSheet.deleteRule(i);
       }
     }
@@ -131,43 +152,36 @@ export class Sheet {
 
     for(const property in props) {
       const res = fixPropertyValue(property, props[property]);
-
       style.setProperty(res.property, res.value, res.priority);
     }
 
     return this;
   }
 
-  getRuleByIndex (index: number): CSSRule {
+  protected getCSSRuleByIndex (index: number): CSSRule {
     return this.styleSheet.cssRules[index];
   }
 
-  getSelectorRulesList (selector: string): CSSRule[] {
+  protected getSelectorCSSRulesList (selector: string): CSSRule[] {
     const rules = Array.from(this.styleSheet.cssRules);
-
     return rules.filter((rule) => {
       return (rule instanceof CSSStyleRule && rule.selectorText === selector);
     });
   }
 
-  getSelectorLastRule (selector: string, index = -1): CSSRule {
-    let rule = this.getSelectorRulesList(selector).pop();
-
+  protected getSelectorLastRule (selector: string, index = -1): CSSRule {
+    let rule = this.getSelectorCSSRulesList(selector).pop();
     if(!rule) {
       const sheet = this.styleSheet;
-
       index = index < 0 ? sheet.cssRules.length : index;
-
       const newIndex = sheet.insertRule(`${selector} {}`, index);
-
-      rule = this.getRuleByIndex(newIndex);
+      rule = this.getCSSRuleByIndex(newIndex);
     }
-
     return rule;
   }
 
   getSelectorProperties (selector: string): RuleProps | false {
-    const rules = this.getSelectorRulesList(selector);
+    const rules = this.getSelectorCSSRulesList(selector);
     const res: RuleProps = {};
     let defined  = false;
 
@@ -193,20 +207,25 @@ export class Sheet {
     return defined ? res : false;
   }
 
-  getRules (): CSSRule[] {
-    return Array.from(this.styleSheet.cssRules);
+  protected getCSSRules (): CSSStyleRule[] {
+    const allCSSRules = Array.from(this.styleSheet.cssRules);
+    return allCSSRules.filter((rule) => (rule instanceof CSSStyleRule)) as CSSStyleRule[];
   }
 
-  [Symbol.iterator] (): Iterator<CSSRule> {
-    const rules = this.styleSheet.cssRules;
+  getRulesSelectors (): string[] {
+    return this.getCSSRules().map((rule) => rule.selectorText);
+  }
+
+  [Symbol.iterator] (): Iterator<Rule> {
+    const selectors = this.getRulesSelectors();
     let   index = 0;
 
     return {
-      next (): IteratorResult<CSSRule> {
-        if(index < rules.length) {
+      next (): IteratorResult<Rule> {
+        if(index < selectors.length) {
           return {
             done: false,
-            value: rules[index++]
+            value: new Rule(this, selectors[index++])
           };
         }
 
@@ -218,27 +237,12 @@ export class Sheet {
     };
   }
 
-  selectorRule (selector: string, props: RuleProps = {}): Rule {
-    return new Rule(this, selector, props);
-  }
-
-  classRule (className: string | RuleProps = null, props: RuleProps = {}): ClassRule {
+  getClassRule (className: string | RuleProps = null, props: RuleProps = {}): ClassRule {
     if(className && typeof className === "object") {
-      props    = className;
-      className  = null;
+      props     = className;
+      className = null;
     }
-
     return new ClassRule(this, className as string, props);
-  }
-
-  static getRulesString (rules: RuleProps): string {
-    const temp: string[] = [];
-
-    for(const prop in rules) {
-      temp.push(fixPropertyValueAsString(prop, rules[prop]));
-    }
-
-    return temp.join("\n");
   }
 
   static _styleSheets: Map<string, Sheet> = new Map();
@@ -246,17 +250,13 @@ export class Sheet {
   static getStyleSheet ({ sheetName = "default", media = "screen", content = null }: SheetOptions = {}): Sheet {
     if(!this._styleSheets.has(sheetName)) {
       const styleSheet = new Sheet(sheetName, media, content);
-
       this._styleSheets.set(sheetName, styleSheet);
     }
-
     return this._styleSheets.get(sheetName);
   }
 
-  static classRule ({ sheetName = "default", className = null, props }: {sheetName?: string; className?: string; props?: RuleProps} = {}): ClassRule {
+  static getClassRule ({ sheetName = "default", className = null, props }: {sheetName?: string; className?: string; props?: RuleProps} = {}): ClassRule {
     const sheet = this.getStyleSheet({ sheetName });
-
-    return sheet.classRule(className, props);
+    return sheet.getClassRule(className, props);
   }
 }
-

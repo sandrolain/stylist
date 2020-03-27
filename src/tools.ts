@@ -62,7 +62,6 @@ export function fixPropertyValueAsString (property: string, value: any, pad = 0)
   return `${"  ".repeat(pad)}${res.property}: ${res.value}${res.priority ? " " : ""}${res.priority};`;
 }
 
-
 export const objectToCSSString = (obj: Record<string, any>, parentKey: string = null, pad: number = 0): string => {
   const res = [];
   const sub = [];
@@ -113,3 +112,11 @@ export const objectToCSSString = (obj: Record<string, any>, parentKey: string = 
 
   return res.concat(sub).join("\n");
 };
+
+export function getRulesString (rules: Record<string, any>): string {
+  const temp: string[] = [];
+  for(const prop in rules) {
+    temp.push(fixPropertyValueAsString(prop, rules[prop]));
+  }
+  return temp.join("\n");
+}
